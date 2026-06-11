@@ -1,381 +1,335 @@
 <!DOCTYPE html>
 <html>
- <head>
-  <title>飞机大战（修复无外链版）</title>
-  <meta charset="utf-8" />
-  <style>
-    *{margin:0;padding:0;box-sizing:border-box}
-    .game-box{margin:20px auto;width:512px;text-align:center}
-    canvas{border:1px solid #666;background:#000}
-    .tip{margin-top:8px;color:#333}
-  </style>
- </head>
- <body>
-  <div class="game-box">
+<head>
+<meta charset="utf-8" />
+<title>飞机大战</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+.game-box{margin:20px auto;width:512px;text-align:center}
+#canvas{border:1px solid #666;background:#050510}
+.tip-text{margin-top:10px;color:#222;font-size:15px;}
+</style>
+</head>
+<body>
+<div class="game-box">
     <canvas id="canvas" width="512" height="768"></canvas>
-    <div class="tip">QWE切换飞机&nbsp;&nbsp;&nbsp;ZXC切换子弹 | 鼠标移动操控战机，移出画布暂停</div>
-  </div>
+    <div class="tip-text">点击游戏画面开始游戏 | 鼠标移动操控飞机 | Q/W/E切换飞机 | R开启散射子弹</div>
+</div>
 
-  <script>
-var canvas = document.getElementById("canvas");
-var context = canvas.getContext("2d");
+<script>
+const canvas = document.getElementById("canvas");
+const context = canvas.getContext("2d");
 const WIDTH = canvas.width;
 const HEIGHT = canvas.height;
 
-// 游戏状态常量
+// 游戏状态枚举
 const START = 0;
 const STARTTING = 1;
 const RUNNING = 2;
 const PAUSED = 3;
 const GAMEOVER = 4;
-var state = START;
-var score = 0;
-var life = 3;
+let state = START;
+let score = 0;
+let life = 3;
 
-// ==================== 1. 滚动星空背景（矢量绘制，无外链） ====================
-function Bg(){
-  this.y1 = 0;
-  this.y2 = -HEIGHT;
-  this.paint = function(cxt){
-    // 深空底色
-    cxt.fillStyle="#050510";
-    cxt.fillRect(0,0,WIDTH,HEIGHT);
-    // 随机星星
-    cxt.fillStyle="#fff";
-    for(let i=0;i<80;i++){
-      let x = (i*47+this.y1*0.3)%WIDTH;
-      let y = (i*31+this.y1)%HEIGHT;
-      cxt.beginPath();
-      cxt.arc(x,y,i%3*0.4+0.3,0,Math.PI*2);
-      cxt.fill();
+// 星空滚动背景
+class Background {
+    constructor() {
+        this.y1 = 0;
+        this.y2 = -HEIGHT;
+        this.stars = [];
+        for(let i=0;i<80;i++){
+            this.stars.push({
+                x: Math.random()*WIDTH,
+                y: Math.random()*HEIGHT,
+                r: Math.random()*0.8+0.2
+            })
+        }
     }
-  }
-  this.step = function(){
-    this.y1 +=2;
-    this.y2 +=2;
-    if(this.y1>=HEIGHT) this.y1=-HEIGHT;
-    if(this.y2>=HEIGHT) this.y2=-HEIGHT;
-  }
-}
-var backg = new Bg();
-
-// 点击画布进入加载动画
-canvas.onclick = function(){
-  if(state == START) state = STARTTING;
-}
-
-// ==================== 2. 开场加载动画 ====================
-function Loading(){
-  this.frameIndex = 0;
-  this.speed = 0;
-  this.paint = function(cxt){
-    cxt.fillStyle="#42a5f5";
-    cxt.fillRect((WIDTH-80)/2, HEIGHT-400,80,400);
-  }
-  this.step = function(){
-    this.speed++;
-    if(this.speed%6===0) this.frameIndex++;
-    if(this.frameIndex >=5) state = RUNNING;
-  }
-}
-var loading = new Loading();
-
-// ==================== 3. 我方战机 ====================
-function Hero(){
-  this.width = 80;
-  this.height = 81;
-  this.x = (WIDTH-this.width)/2;
-  this.y = HEIGHT-this.height-30;
-  this.down = false;
-  this.life = 20;
-  this.frameIndex = 0;
-  this.speed = 0;
-  this.shipType = 0; // 0默认 1Q 2W 3E
-  this.paint = function(cxt){
-    cxt.save();
-    let cx = this.x+this.width/2, cy=this.y+this.height/2;
-    // 三种飞机造型切换
-    if(this.shipType===0){
-      cxt.fillStyle="#2196F3";
-    }else if(this.shipType===1){
-      cxt.fillStyle="#4CAF50";
-    }else if(this.shipType===2){
-      cxt.fillStyle="#FF9800";
+    paint(cxt) {
+        cxt.fillStyle="#050510";
+        cxt.fillRect(0,0,WIDTH,HEIGHT);
+        cxt.fillStyle="#ffffff";
+        this.stars.forEach(s=>{
+            cxt.beginPath();
+            cxt.arc(s.x,s.y,s.r,0,Math.PI*2);
+            cxt.fill();
+            s.y += 0.6;
+            if(s.y>HEIGHT){
+                s.y=0;
+                s.x=Math.random()*WIDTH;
+            }
+        })
     }
-    // 机身
-    cxt.beginPath();
-    cxt.moveTo(cx, this.y);
-    cxt.lineTo(this.x, this.y+this.height);
-    cxt.lineTo(this.x+this.width, this.y+this.height);
-    cxt.closePath();
-    cxt.fill();
-    // 机翼
-    cxt.fillRect(this.x-8, this.y+16,12,18);
-    cxt.fillRect(this.x+this.width-4, this.y+16,12,18);
-    // 尾焰动态
-    cxt.fillStyle="#FF5722";
-    cxt.beginPath();
-    cxt.moveTo(cx-5, this.y+this.height);
-    cxt.lineTo(cx, this.y+this.height+8+Math.random()*3);
-    cxt.lineTo(cx+5, this.y+this.height);
-    cxt.fill();
-    cxt.restore();
-  }
-  this.step = function(){
-    if(this.down){
-      this.frameIndex++;
-      if(this.frameIndex>=6){
-        life--;
-        if(life<=0) state=GAMEOVER;
-        else hero = new Hero();
-      }
-    }else{
-      this.speed++;
-      if(this.speed%2===0) this.frameIndex = (this.frameIndex+1)%2;
+    step() {
+        this.y1 += 2;
+        this.y2 += 2;
+        if(this.y1 >= HEIGHT) this.y1 = -HEIGHT;
+        if(this.y2 >= HEIGHT) this.y2 = -HEIGHT;
     }
-  }
-  this.canDown = function(){
-    this.life--;
-    if(this.life<=0){
-      this.down=true;
-      this.frameIndex=2;
-    }
-  }
 }
-var hero = new Hero();
+const bg = new Background();
 
-// 鼠标跟随移动
-canvas.onmousemove = function(e){
-  if(state===RUNNING){
-    let rect = canvas.getBoundingClientRect();
-    hero.x = e.clientX - rect.left - hero.width/2;
-    hero.y = e.clientY - rect.top - hero.height/2;
+// 我方飞机
+class Hero {
+    constructor() {
+        this.w = 80;
+        this.h = 81;
+        this.x = (WIDTH - this.w)/2;
+        this.y = HEIGHT - this.h - 30;
+        this.life = 20;
+        this.down = false;
+        this.shipStyle = 0; // 0蓝 1绿 2橙
+    }
+    paint(cxt) {
+        cxt.save();
+        const cx = this.x + this.w/2;
+        if(this.shipStyle === 0) cxt.fillStyle="#2196F3";
+        else if(this.shipStyle === 1) cxt.fillStyle="#4CAF50";
+        else cxt.fillStyle="#FF9800";
+
+        // 机身
+        cxt.beginPath();
+        cxt.moveTo(cx, this.y);
+        cxt.lineTo(this.x, this.y+this.h);
+        cxt.lineTo(this.x+this.w, this.y+this.h);
+        cxt.closePath();
+        cxt.fill();
+        // 机翼
+        cxt.fillRect(this.x-8, this.y+16, 12, 18);
+        cxt.fillRect(this.x+this.w-4, this.y+16, 12, 18);
+        // 尾焰
+        cxt.fillStyle="#FF5722";
+        cxt.beginPath();
+        cxt.moveTo(cx-5, this.y+this.h);
+        cxt.lineTo(cx, this.y+this.h+6+Math.random()*4);
+        cxt.lineTo(cx+5, this.y+this.h);
+        cxt.fill();
+        cxt.restore();
+    }
+    getRect() {
+        return {x:this.x,y:this.y,w:this.w,h:this.h}
+    }
+    hurt() {
+        this.life--;
+        if(this.life <= 0) {
+            this.down = true;
+            life--;
+            if(life <= 0) state = GAMEOVER;
+        }
+    }
+}
+let hero = new Hero();
+
+// 子弹类
+class Bullet {
+    constructor(x,y,offsetX=0) {
+        this.w = 11;
+        this.h = 25;
+        this.x = x + offsetX;
+        this.y = y;
+        this.speed = 24;
+        this.del = false;
+    }
+    paint(cxt) {
+        cxt.fillStyle="#FFEB3B";
+        cxt.fillRect(this.x,this.y,this.w,this.h);
+    }
+    step() {
+        this.y -= this.speed;
+        if(this.y < -this.h) this.del = true;
+    }
+    getRect() {
+        return {x:this.x,y:this.y,w:this.w,h:this.h}
+    }
+}
+let bulletList = [];
+let shootTimer = 0;
+const SHOOT_INTERVAL = 6;
+let multiBullet = false;
+
+// 敌机类
+class Enemy {
+    constructor(type) {
+        this.type = type;
+        this.down = false;
+        this.del = false;
+        if(type === 1) {
+            this.w = 68;this.h=55;this.hp=4;this.score=1;this.speed=5;
+        }else if(type === 2) {
+            this.w = 90;this.h=60;this.hp=10;this.score=3;this.speed=3;
+        }else{
+            this.w = 222;this.h=170;this.hp=20;this.score=10;this.speed=2;
+        }
+        this.x = Math.random()*(WIDTH - this.w);
+        this.y = -this.h;
+    }
+    paint(cxt) {
+        if(this.type===1) cxt.fillStyle="#f44336";
+        else if(this.type===2) cxt.fillStyle="#9c27b0";
+        else cxt.fillStyle="#222222";
+        if(this.down) cxt.fillStyle="#ff9800";
+        cxt.fillRect(this.x,this.y,this.w,this.h);
+    }
+    step() {
+        if(this.down) {
+            this.del = true;
+            score += this.score;
+            return;
+        }
+        this.y += this.speed;
+        if(this.y > HEIGHT) this.del = true;
+    }
+    hurt() {
+        this.hp--;
+        if(this.hp <= 0) this.down = true;
+    }
+    getRect() {
+        return {x:this.x,y:this.y,w:this.w,h:this.h}
+    }
+}
+let enemyList = [];
+
+// 碰撞检测工具
+function checkCollision(a,b) {
+    return a.x < b.x+b.w && a.x+a.w>b.x && a.y<b.y+b.h && a.y+a.h>b.y;
+}
+
+// 生成敌机
+function spawnEnemy() {
+    const r = Math.random()*50;
+    if(r>=6&&r<=15) enemyList.push(new Enemy(1));
+    else if(r>=16&&r<=20) enemyList.push(new Enemy(2));
+    else if(r>=41&&r<=45 && !enemyList.some(e=>e.type===3)) enemyList.push(new Enemy(3));
+}
+
+// 自动发射子弹
+function doShoot() {
+    shootTimer++;
+    if(shootTimer < SHOOT_INTERVAL) return;
+    shootTimer = 0;
+    const h = hero.getRect();
+    bulletList.push(new Bullet(h.x+h.w/2-5, h.y));
+    if(multiBullet) {
+        bulletList.push(new Bullet(h.x+h.w/2-5, h.y, -22));
+        bulletList.push(new Bullet(h.x+h.w/2-5, h.y, 22));
+    }
+}
+
+// 鼠标移动控制飞机
+canvas.onmousemove = function(e) {
+    if(state !== RUNNING) return;
+    const rect = canvas.getBoundingClientRect();
+    let mx = e.clientX - rect.left - hero.w/2;
+    let my = e.clientY - rect.top - hero.h/2;
     // 边界锁定
-    hero.x = Math.max(0, Math.min(WIDTH-hero.width, hero.x));
-    hero.y = Math.max(0, Math.min(HEIGHT-hero.height, hero.y));
-  }
+    mx = Math.max(0, Math.min(WIDTH-hero.w, mx));
+    my = Math.max(0, Math.min(HEIGHT-hero.h, my));
+    hero.x = mx;
+    hero.y = my;
 }
 
-// ==================== 4. 子弹系统 ====================
-let bulletMode = 0; // 0单排 1散射多排
-var bullets = [],bullets2=[],bullets3=[],bullets4=[],bullets5=[],bullets6=[],bullets7=[];
-var wudi=0,dj=0;
-
-function Bullet(){
-  this.w=11;this.h=25;
-  this.x = hero.x+hero.width/2 - this.w/2;
-  this.y = hero.y - this.h -5;
-  this.del=false;
-  this.paint=function(cxt){
-    cxt.fillStyle="#FFEB3B";
-    cxt.fillRect(this.x,this.y,this.w,this.h);
-  }
-  this.step=function(){this.y-=25;}
-}
-function Bullet2(){
-  this.w=11;this.h=25;
-  this.x = hero.x+hero.width/2 - this.w-20;
-  this.y = hero.y - this.h+10;
-  this.del2=false;
-  this.paint2=c=>{c.fillStyle="#FFEB3B";c.fillRect(this.x,this.y,this.w,this.h);}
-  this.step2=()=>{this.y-=25;}
-}
-function Bullet3(){
-  this.w=11;this.h=25;
-  this.x = hero.x+hero.width/2 - this.w+30;
-  this.y = hero.y - this.h+10;
-  this.del3=false;
-  this.paint3=c=>{c.fillStyle="#FFEB3B";c.fillRect(this.x,this.y,this.w,this.h);}
-  this.step3=()=>{this.y-=25;}
-}
-// 自动发射子弹（节流，不再无限生成）
-let shootCd=0;
-function autoShoot(){
-  shootCd++;
-  if(shootCd<6)return;
-  shootCd=0;
-  bullets.push(new Bullet());
-  if(wudi>=1||(score>=20&&score<100)) bullets2.push(new Bullet2());
-  if(wudi>=2||(score>=100&&score<150)) bullets3.push(new Bullet3());
+// 点击画布进入游戏
+canvas.onclick = function() {
+    if(state === START) state = RUNNING;
 }
 
-// 批量绘制/移动/清理子弹
-function paintBullets(){
-  bullets.forEach(b=>b.paint(context));
-  bullets2.forEach(b=>b.paint2(context));
-  bullets3.forEach(b=>b.paint3(context));
-}
-function stepBullets(){
-  bullets.forEach(b=>b.step());
-  bullets2.forEach(b=>b.step2());
-  bullets3.forEach(b=>b.step3());
-}
-function delBullets(){
-  bullets=bullets.filter(b=>b.y>-b.h&&!b.del);
-  bullets2=bullets2.filter(b=>b.y1>-b.h&&!b.del2);
-  bullets3=bullets3.filter(b=>b.y2>-b.h&&!b.del3);
+// 鼠标移出暂停、移入继续
+canvas.onmouseout = ()=>{if(state===RUNNING) state=PAUSED;}
+canvas.onmouseover = ()=>{if(state===PAUSED) state=RUNNING;}
+
+// 键盘按键
+document.onkeydown = function(e) {
+    const key = e.keyCode;
+    if(key === 81) hero.shipStyle = 0; // Q
+    if(key === 87) hero.shipStyle = 1; // W
+    if(key === 69) hero.shipStyle = 2; // E
+    if(key === 82) multiBullet = !multiBullet; // R 开启散射子弹
 }
 
-// ==================== 5. 敌机系统 ====================
-function Enemy(type){
-  this.type=type;
-  this.down=false;this.del=false;this.frameIndex=0;
-  if(type===1){//小飞机
-    this.w=68;this.h=55;this.life=4;this.score=1;this.speed=5;
-  }else if(type===2){//中飞机
-    this.w=90;this.h=60;this.life=10;this.score=3;this.speed=3;
-  }else{//大BOSS
-    this.w=222;this.h=170;this.life=20;this.score=10;this.speed=2;
-  }
-  this.x=Math.random()*(WIDTH-this.w);
-  this.y=-this.h;
-  this.paint=function(cxt){
-    if(this.type===1) cxt.fillStyle="#F44336";
-    else if(this.type===2) cxt.fillStyle="#9C27B0";
-    else cxt.fillStyle="#000";
-    cxt.fillRect(this.x,this.y,this.w,this.h);
-    // 爆炸变色
-    if(this.down) cxt.fillStyle="#FF9800";
-    cxt.fillRect(this.x,this.y,this.w,this.h);
-  }
-  this.step=function(){
-    if(this.down){
-      this.frameIndex++;
-      if(this.frameIndex>=6){this.del=true;score+=this.score;}
-      return;
-    }
-    this.y+=this.speed;
-  }
-  this.canDown=function(){
-    this.life--;
-    if(this.life<=0) this.down=true,this.frameIndex=1;
-  }
-  // 碰撞检测
-  this.isHit=function(obj){
-    let ox=obj.x||obj.x1||obj.x2,oy=obj.y||obj.y1||obj.y2;
-    let ow=obj.w||11,oh=obj.h||25;
-    return ox<this.x+this.w&&ox+ow>this.x&&oy<this.y+this.h&&oy+oh>this.y;
-  }
-}
-var enemies=[];
-// 生成敌机（修复5.9浮点数BUG）
-function createEnemy(){
-  let r=Math.random()*50;
-  if(r>=6&&r<=15) enemies.push(new Enemy(1));
-  else if(r>=16&&r<=20) enemies.push(new Enemy(2));
-  else if(r>=41&&r<=45&&!enemies.some(e=>e.type===3)) enemies.push(new Enemy(3));
-}
-function paintEnemies(){enemies.forEach(e=>e.paint(context));}
-function stepEnemies(){enemies.forEach(e=>e.step());}
-function delEnemies(){enemies=enemies.filter(e=>e.y<HEIGHT&&!e.del);}
-
-// 碰撞全局检测
-function checkHit(){
-  enemies.forEach(e=>{
-    // 本机撞击敌机
-    if(e.isHit(hero)&&!hero.down&&!e.down) hero.canDown(),e.canDown();
-    // 子弹撞击敌机
-    bullets.forEach(b=>{if(e.isHit(b)&&!e.down){b.del=true;e.canDown();}});
-    bullets2.forEach(b=>{if(e.isHit(b)&&!e.down){b.del2=true;e.canDown();}});
-    bullets3.forEach(b=>{if(e.isHit(b)&&!e.down){b.del3=true;e.canDown();}});
-  })
+// 绘制顶部文字
+function drawUI() {
+    context.fillStyle="#ffffff";
+    context.font="bold 24px Microsoft YaHei";
+    context.fillText("SCORE : "+score, 10, 30);
+    context.fillText("LIFE : "+life, WIDTH-130, 30);
 }
 
-// 绘制文字分数血量
-function paintText(){
-  context.fillStyle="#fff";
-  context.font="bold 24px Microsoft YaHei";
-  context.fillText("SCORE : "+score,10,30);
-  context.fillText("LIFE : "+life,380,30);
-}
-
-// 暂停标记绘制
-function drawPause(){
-  context.fillStyle="rgba(0,0,0,0.5)";
-  context.fillRect(0,0,WIDTH,HEIGHT);
-  context.fillStyle="#fff";
-  context.font="36px Microsoft YaHei";
-  context.textAlign="center";
-  context.fillText("游戏暂停",WIDTH/2,HEIGHT/2);
-  context.textAlign="left";
-}
-// 游戏结束
-function paintOver(){
-  context.fillStyle="#f44336";
-  context.font="bold 48px Microsoft YaHei";
-  context.textAlign="center";
-  context.fillText("GAME OVER",WIDTH/2,HEIGHT/2);
-  context.textAlign="left";
-}
-
-// 鼠标移出暂停、移入恢复
-canvas.onmouseout=()=>{if(state===RUNNING) state=PAUSED;}
-canvas.onmouseover=()=>{if(state===PAUSED) state=RUNNING;}
-
-// 键盘按键绑定 QWE切换飞机 ZXC子弹 R无敌 V大子弹
-document.onkeydown=e=>{
-  let code = e.keyCode;
-  if(code===81) hero.shipType=1; //Q
-  if(code===87) hero.shipType=2; //W
-  if(code===69) hero.shipType=0; //E
-
-  if(code===90) bulletMode=0; //Z
-  if(code===88) bulletMode=1; //X
-  if(code===67) bulletMode=2; //C
-
-  if(code===82) wudi=(wudi+1)%8; //R无敌档位
-  if(code===86) dj=!dj;
-}
-
-// 游戏主定时器
+// 主循环
 setInterval(()=>{
-  backg.paint(context);
-  backg.step();
-  switch(state){
-    case START:
-      context.fillStyle="#fff";
-      context.font="40px Microsoft YaHei";
-      context.textAlign="center";
-      context.fillText("点击画布开始游戏",WIDTH/2,HEIGHT/2);
-      context.textAlign="left";
-      break;
-    case STARTTING:
-      loading.paint(context);
-      loading.step();
-      break;
-    case RUNNING:
-      autoShoot();
-      hero.paint(context);
-      hero.step();
+    bg.paint(context);
+    bg.step();
 
-      paintBullets();
-      stepBullets();
-      delBullets();
+    switch(state) {
+        case START:
+            context.fillStyle="#fff";
+            context.font="32px Microsoft YaHei";
+            context.textAlign="center";
+            context.fillText("点击画面任意位置开始游戏", WIDTH/2, HEIGHT/2);
+            context.textAlign="left";
+            break;
 
-      createEnemy();
-      paintEnemies();
-      stepEnemies();
-      delEnemies();
+        case RUNNING:
+            doShoot();
+            hero.paint(context);
 
-      checkHit();
-      paintText();
-      break;
-    case PAUSED:
-      hero.paint(context);
-      paintBullets();
-      paintEnemies();
-      paintText();
-      drawPause();
-      break;
-    case GAMEOVER:
-      hero.paint(context);
-      paintBullets();
-      paintEnemies();
-      paintText();
-      paintOver();
-      break;
-  }
-},30);
-  </script>
- </body>
+            // 更新&绘制子弹
+            bulletList.forEach(b=>{b.step();b.paint(context);});
+            bulletList = bulletList.filter(b=>!b.del);
+
+            // 生成敌机
+            if(Math.random()<0.025) spawnEnemy();
+            enemyList.forEach(e=>{e.step();e.paint(context);});
+            enemyList = enemyList.filter(e=>!e.del);
+
+            // 碰撞检测
+            const heroRect = hero.getRect();
+            enemyList.forEach(enemy=>{
+                const eRect = enemy.getRect();
+                // 飞机撞到敌机
+                if(checkCollision(heroRect,eRect) && !enemy.down && !hero.down) {
+                    hero.hurt();
+                    enemy.hurt();
+                }
+                // 子弹打敌机
+                bulletList.forEach(bullet=>{
+                    if(checkCollision(bullet.getRect(),eRect) && !enemy.down) {
+                        bullet.del = true;
+                        enemy.hurt();
+                    }
+                })
+            })
+            drawUI();
+            break;
+
+        case PAUSED:
+            hero.paint(context);
+            bulletList.forEach(b=>b.paint(context));
+            enemyList.forEach(e=>e.paint(context));
+            drawUI();
+            // 半透明遮罩
+            context.fillStyle="rgba(0,0,0,0.5)";
+            context.fillRect(0,0,WIDTH,HEIGHT);
+            context.fillStyle="#fff";
+            context.font="36px Microsoft YaHei";
+            context.textAlign="center";
+            context.fillText("游戏暂停，鼠标移回画布继续", WIDTH/2, HEIGHT/2);
+            context.textAlign="left";
+            break;
+
+        case GAMEOVER:
+            hero.paint(context);
+            bulletList.forEach(b=>b.paint(context));
+            enemyList.forEach(e=>e.paint(context));
+            drawUI();
+            context.fillStyle="#ff4444";
+            context.font="48px Microsoft YaHei";
+            context.textAlign="center";
+            context.fillText("GAME OVER", WIDTH/2, HEIGHT/2);
+            context.textAlign="left";
+            break;
+    }
+}, 30);
+</script>
+</body>
 </html>
