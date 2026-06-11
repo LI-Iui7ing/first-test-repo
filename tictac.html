@@ -108,10 +108,10 @@ td.X{
 </style>
 </head>
 <body>
-<h1>🌐 点对点联机井字棋</h1>
+<h1>🌐 兼容校园网联机井字棋</h1>
 <div class="room-box">
     <span>房间号：</span>
-    <input id="roomId" placeholder="自定义6位房间码" maxlength="6">
+    <input id="roomId" placeholder="6位数字房间码" maxlength="6">
     <button id="joinBtn">加入/创建房间</button>
 </div>
 <div id="stateTip">未连接房间，请输入房间号加入</div>
@@ -136,12 +136,29 @@ td.X{
 <button class="restart-btn" onclick="resetGame()">重新开局</button>
 </div>
 <div class="tips">
-1. 两个人输入一模一样的6位房间号，点加入房间即可联机<br>
-2. 先创建房间的是O先手，后加入是X后手；只能轮到自己才能落子
+1. 第一人先创建房间等待，第二人延迟3秒再加入<br>
+2. 校园网也可正常联机，轮到自己才能落子，棋盘双向同步
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.2/dist/peerjs.min.js"></script>
 <script>
+// 配置全球免费中转服务器，绕过校园网内网拦截
+const peerConfig = {
+    config: {
+        iceServers: [
+            // STUN 打洞
+            {urls: "stun:stun.l.google.com:19302"},
+            {urls: "stun:stun1.l.google.com:19302"},
+            // TURN 中继兜底（外网中转，校园网必走这条）
+            {
+                urls: "turn:openrelay.metered.ca:80",
+                username: "openrelayproject",
+                credential: "openrelayproject"
+            }
+        ]
+    }
+};
+
 let peer, conn;
 let roomId = '';
 let myRole = null;
@@ -159,101 +176,93 @@ cells.forEach(cell=>{
     }
 })
 
-// 加入房间按钮
+// 加入房间按钮逻辑
 document.getElementById('joinBtn').onclick = ()=>{
     roomId = document.getElementById('roomId').value.trim();
     if(!roomId || roomId.length!==6){
         alert('请填写6位数字房间号！');
         return;
     }
-    stateTip.innerText = "正在连接房间...";
-    peer = new Peer(roomId);
+    stateTip.innerText = "正在连接中转服务器，请稍候...";
+    peer = new Peer(roomId, peerConfig);
 
-    // 自己是创建者（O先手）
-    peer.on('open', id=>{
+    // 自己创建房间（O先手）
+    peer.on('open', ()=>{
         myRole = 'O';
         isMyTurn = true;
-        stateTip.innerText = `你是房主【O】，等待对手接入...`;
-        // 等待对方接入
+        stateTip.innerText = `你是房主【O】，等待对方接入（校园网连接会慢几秒）`;
         peer.on('connection', c=>{
             conn = c;
-            bindConnEvents();
-            stateTip.innerText = `对手已接入！轮到你下棋`;
+            bindConnEvent();
+            stateTip.innerText = `对手成功接入！轮到你下棋`;
         })
     })
 
-    // 作为客户端加入已有房间（X后手）
+    // 加入别人房间（X后手）
     peer.on('error', err=>{
-        if(err.type==='unavailable-id'){
-            peer = new Peer();
+        if(err.type === 'unavailable-id'){
+            peer = new Peer(undefined, peerConfig);
             peer.on('open',()=>{
                 conn = peer.connect(roomId);
                 myRole = 'X';
                 isMyTurn = false;
                 stateTip.innerText = `你是【X】，等待房主落子`;
-                bindConnEvents();
+                bindConnEvent();
             })
+        }else{
+            stateTip.innerText = `连接失败，多点击一次加入房间重试`;
         }
     })
 }
 
-// 绑定连接消息监听
-function bindConnEvents(){
+// 绑定通信事件
+function bindConnEvent(){
     conn.on('data', data=>{
-        if(data.type==='move'){
+        if(data.type === 'move'){
             const {index,role} = data;
             board[index] = role;
             cells[index].innerText = role;
             cells[index].classList.add(role);
-            // 切换回合
             isMyTurn = !isMyTurn;
-            stateTip.innerText = isMyTurn ? '轮到你下棋' : '等待对手落子';
+            stateTip.innerText = isMyTurn ? '轮到你落子' : '等待对手落子';
             checkWin();
         }
-        if(data.type==='restart'){
-            resetLocalGame();
-        }
+        if(data.type === 'restart') resetLocalBoard();
     })
     conn.on('close',()=>{
         alert('对手断开连接，对局结束');
-        resetLocalGame();
+        resetLocalBoard();
     })
 }
 
 // 本地重置棋盘
-function resetLocalGame(){
+function resetLocalBoard(){
     board = ['','','','','','','','',''];
     cells.forEach(c=>{
         c.innerText = '';
         c.className = '';
     })
-    isMyTurn = (myRole==='O');
-    stateTip.innerText = isMyTurn ? '新对局，轮到你下棋' : '等待对手';
+    isMyTurn = myRole === 'O';
+    stateTip.innerText = isMyTurn ? '新对局轮到你下棋' : '等待对手';
 }
 
-// 全局重启对局，同步给对方
+// 双方同步重启对局
 function resetGame(){
     if(conn) conn.send({type:'restart'});
-    resetLocalGame();
+    resetLocalBoard();
 }
 
 // 胜负判定
 function checkWin(){
-    let winLine = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+    const winLine = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
     for(let line of winLine){
-        let [a,b,c] = line;
+        const [a,b,c] = line;
         if(board[a] && board[a]===board[b] && board[a]===board[c]){
-            setTimeout(()=>{
-                alert(`${board[a]} 玩家获胜！`);
-            },100);
+            setTimeout(()=>alert(`${board[a]} 玩家获胜！`),100);
             return;
         }
     }
-    if(!board.includes('')){
-        setTimeout(()=>{
-            alert('棋盘填满，平局！');
-        },100);
-    }
+    if(!board.includes('')) setTimeout(()=>alert('棋盘填满，平局！'),100);
 }
 </script>
 </body>
