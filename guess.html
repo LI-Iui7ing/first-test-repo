@@ -3,25 +3,125 @@
 <head>
     <meta charset="UTF-8">
     <title>猜数字小游戏</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: "Microsoft YaHei",sans-serif;
+        }
+        body {
+            background: linear-gradient(135deg, #fff3e0, #ffe0b2);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding-top: 60px;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+            font-size: 28px;
+        }
+        .game-box {
+            background: #ffffff;
+            padding: 35px;
+            border-radius: 18px;
+            box-shadow: 0 10px 32px rgba(0,0,0,0.11);
+            text-align: center;
+        }
+        .input-area {
+            margin: 20px 0;
+        }
+        #inp {
+            width: 220px;
+            height: 46px;
+            font-size: 18px;
+            padding: 0 14px;
+            border: 2px solid #ffcc80;
+            border-radius: 9px;
+            outline: none;
+            transition: 0.2s;
+        }
+        #inp:focus {
+            border-color: #ff9800;
+            box-shadow: 0 0 0 3px rgba(255,152,0,0.2);
+        }
+        .submit-btn {
+            margin-left: 12px;
+            height: 46px;
+            padding: 0 22px;
+            border: none;
+            border-radius: 9px;
+            background: linear-gradient(90deg,#ffb74d,#ff9800);
+            color: white;
+            font-size: 17px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .submit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(255,152,0,0.35);
+        }
+        .tip-desc {
+            margin-top: 15px;
+            color: #777;
+            font-size: 15px;
+        }
+        .restart-btn {
+            margin-top: 20px;
+            padding: 9px 22px;
+            border-radius: 8px;
+            border: 1px solid #ff9800;
+            background: #fff;
+            color: #ff7800;
+            cursor: pointer;
+            font-size: 16px;
+        }
+    </style>
 </head>
 <body>
-    <h2>猜1-100数字游戏</h2>
-    <script>
-        let num = Math.floor(Math.random()*100)+1;
-        let count = 0;
-        function guess(){
-            let input = document.getElementById("inp").value;
-            count++;
-            if(input<num){
-                alert("小了！再试试");
-            }else if(input>num){
-                alert("大了！再试试");
-            }else{
-                alert(`恭喜猜对！一共猜了${count}次`);
-            }
-        }
-    </script>
-    <input id="inp" placeholder="输入数字">
-    <button onclick="guess()">提交猜测</button>
+    <h1>🎲 猜数字小游戏（1~100）</h1>
+    <div class="game-box">
+        <div class="input-area">
+            <input id="inp" placeholder="请输入1-100之间数字">
+            <button class="submit-btn" onclick="guess()">提交猜测</button>
+        </div>
+        <button class="restart-btn" onclick="resetGame()">重新开局</button>
+    </div>
+    <div class="tip-desc">系统随机生成一个数字，提示偏大/偏小，猜对即结束</div>
+
+<script>
+let num = Math.floor(Math.random()*100)+1;
+let count = 0;
+
+function guess(){
+    let val = document.getElementById("inp").value.trim();
+    if(!val || isNaN(val)){
+        alert("请输入合法数字！");
+        return;
+    }
+    let input = Number(val);
+    if(input<1 || input>100){
+        alert("必须填写1~100范围内的数字！");
+        return;
+    }
+    count++;
+    if(input<num){
+        alert("📉 数字小了！再试一试");
+    }else if(input>num){
+        alert("📈 数字大了！再试一试");
+    }else{
+        alert(`🎉 恭喜猜对！一共尝试了${count}次`);
+    }
+    document.getElementById("inp").value = '';
+}
+
+function resetGame(){
+    num = Math.floor(Math.random()*100)+1;
+    count = 0;
+    document.getElementById("inp").value = '';
+    alert("已重新生成新数字，开始新一轮游戏！");
+}
+</script>
 </body>
 </html>
