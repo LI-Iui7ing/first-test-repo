@@ -1,60 +1,188 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-CN">
 <head>
     <meta charset="utf-8">
     <title>贪吃蛇</title>
     <style>
-        canvas{border:2px solid #333}
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: "Microsoft Yahei", sans-serif;
+        }
+        body {
+            background: linear-gradient(135deg, #e0f7fa, #f3e5f5);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding-top: 40px;
+        }
+        .game-wrapper {
+            background: #ffffff;
+            padding: 20px 25px;
+            border-radius: 16px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.15);
+        }
+        .top-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        .score-box {
+            font-size: 19px;
+            font-weight: bold;
+            color: #222;
+        }
+        #score {
+            color: #2e7d32;
+            font-size: 22px;
+            margin-left: 6px;
+        }
+        #restartBtn {
+            padding: 8px 20px;
+            border: none;
+            background: linear-gradient(90deg, #42a5f5, #1e88e5);
+            color: #fff;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        #restartBtn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(30,136,229,0.35);
+        }
+        canvas {
+            border-radius: 10px;
+            border: none;
+            box-shadow: inset 0 0 0 3px #bdbdbd;
+            background: #fafafa;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 26px;
+        }
+        .tip-text {
+            margin-top: 14px;
+            color: #666;
+            font-size: 14px;
+        }
     </style>
 </head>
 <body>
-<canvas id="game" width="400" height="400"></canvas>
+    <h1>🐍 趣味贪吃蛇小游戏</h1>
+    <div class="game-wrapper">
+        <div class="top-bar">
+            <div class="score-box">当前得分：<span id="score">0</span></div>
+            <button id="restartBtn">🔄 重新开始</button>
+        </div>
+        <canvas id="game" width="400" height="400"></canvas>
+    </div>
+    <div class="tip-text">操作提示：键盘 ↑ ↓ ← → 方向键控制移动，撞墙会穿墙，不会直接结束</div>
+
 <script>
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
+const scoreText = document.getElementById('score');
+const restartBtn = document.getElementById('restartBtn');
+
 const size = 20;
-let snake = [{x:10,y:10}];
-let dx=1, dy=0;
-let food = {x:Math.floor(Math.random()*20),y:Math.floor(Math.random()*20)};
+let speed = 180; // 慢速适配新手
+let score = 0;
+let timer = null;
 
-document.addEventListener('keydown',e=>{
-    if(e.key==='ArrowUp'&&dy!==1){dx=0;dy=-1}
-    if(e.key==='ArrowDown'&&dy!==-1){dx=0;dy=1}
-    if(e.key==='ArrowLeft'&&dx!==1){dx=-1;dy=0}
-    if(e.key==='ArrowRight'&&dx!==-1){dx=1;dy=0}
-})
+let snake = [{x: 10, y: 10}];
+let dx = 1, dy = 0;
+let food = {};
 
-function loop(){
-    let head = {x:snake[0].x+dx, y:snake[0].y+dy};
-    //撞墙判定
-    if(head.x<0||head.x>=20||head.y<0||head.y>=20){
-        alert("游戏结束！");
-        return;
-    }
-    //撞到自己
-    for(let seg of snake){
-        if(seg.x===head.x&&seg.y===head.y){
-            alert("撞到自己，游戏结束");
+// 随机生成食物
+function createFood() {
+    return {
+        x: Math.floor(Math.random() * 20),
+        y: Math.floor(Math.random() * 20)
+    };
+}
+
+// 重置游戏
+function resetGame() {
+    clearInterval(timer);
+    score = 0;
+    scoreText.textContent = score;
+    snake = [{x: 10, y: 10}];
+    dx = 1;
+    dy = 0;
+    food = createFood();
+    timer = setInterval(loop, speed);
+}
+
+// 方向键监听
+document.addEventListener('keydown', e => {
+    if (e.key === 'ArrowUp' && dy !== 1) { dx = 0; dy = -1; }
+    if (e.key === 'ArrowDown' && dy !== -1) { dx = 0; dy = 1; }
+    if (e.key === 'ArrowLeft' && dx !== 1) { dx = -1; dy = 0; }
+    if (e.key === 'ArrowRight' && dx !== -1) { dx = 1; dy = 0; }
+});
+
+restartBtn.addEventListener('click', resetGame);
+
+// 游戏主循环
+function loop() {
+    let head = {x: snake[0].x + dx, y: snake[0].y + dy};
+
+    // 穿墙机制，撞边界从另一侧出现
+    if (head.x < 0) head.x = 19;
+    if (head.x >= 20) head.x = 0;
+    if (head.y < 0) head.y = 19;
+    if (head.y >= 20) head.y = 0;
+
+    // 撞到自身判定
+    for (let seg of snake) {
+        if (seg.x === head.x && seg.y === head.y) {
+            alert(`撞到自己啦！最终得分：${score}，点击按钮重新游玩`);
+            clearInterval(timer);
             return;
         }
     }
+
     snake.unshift(head);
-    //吃到食物
-    if(head.x===food.x&&head.y===food.y){
-        food={x:Math.floor(Math.random()*20),y:Math.floor(Math.random()*20)}
-    }else{
+
+    // 吃到食物加分，不提速
+    if (head.x === food.x && head.y === food.y) {
+        score += 10;
+        scoreText.textContent = score;
+        food = createFood();
+    } else {
         snake.pop();
     }
 
-    //重绘
-    ctx.fillStyle="#fff";
-    ctx.fillRect(0,0,400,400);
-    ctx.fillStyle="green";
-    snake.forEach(seg=>ctx.fillRect(seg.x*size,seg.y*size,size-2,size-2))
-    ctx.fillStyle="red";
-    ctx.fillRect(food.x*size,food.y*size,size-2,size-2);
+    // 绘制背景
+    ctx.fillStyle = "#fafafa";
+    ctx.fillRect(0, 0, 400, 400);
+
+    // 绘制蛇（渐变绿色圆角方块）
+    snake.forEach((seg, index) => {
+        if(index === 0){
+            // 蛇头深色
+            ctx.fillStyle = "#1b5e20";
+        }else{
+            // 身体渐变浅绿
+            ctx.fillStyle = "#388e3c";
+        }
+        ctx.beginPath();
+        ctx.roundRect(seg.x * size + 1, seg.y * size + 1, size - 4, size - 4, 4);
+        ctx.fill();
+    });
+
+    // 绘制食物（红色圆角）
+    ctx.fillStyle = "#d32f2f";
+    ctx.beginPath();
+    ctx.roundRect(food.x * size + 1, food.y * size + 1, size - 4, size - 4, 6);
+    ctx.fill();
 }
-setInterval(loop,120);
+
+resetGame();
 </script>
 </body>
 </html>
