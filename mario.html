@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>简易马里奥</title>
+<style>
+*{
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: "Microsoft YaHei", sans-serif;
+}
+body{
+  background: #111;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 20px;
+}
+#gameCanvas{
+  border: 2px solid #54c5ff;
+  background: #63b8ff;
+}
+.info-bar{
+  width: 800px;
+  display: flex;
+  justify-content: space-between;
+  color: #fff;
+  font-size: 18px;
+  margin-bottom: 8px;
+}
+.ctrl-tip{
+  color: #aaa;
+  margin-top: 10px;
+}
+</style>
+</head>
+<body>
+<div class="info-bar">
+  <span>得分：<span id="score">0</span></span>
+  <button id="restart">重新开始</button>
+</div>
+<canvas id="gameCanvas" width="800" height="400"></canvas>
+<div class="ctrl-tip">← → 移动 | 空格 跳跃 | 踩怪物消灭敌人，触碰金币加分</div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const scoreDom = document.getElementById('score');
+
+// 全局参数
+const GRAVITY = 0.6;
+const JUMP_FORCE = -14;
+let score = 0;
+let keys = {};
+
+// 马里奥玩家对象
+const mario = {
+  x: 50,
+  y: 300,
+  w: 32,
+  h: 40,
+  vx: 0,
+  vy: 0,
+  speed: 5,
+  onGround: false
+};
+
+// 地面、平台数组
+const platforms = [
+  {x:0, y:360, w:800, h:40},
+  {x:180, y:280, w:120, h:20},
+  {x:380, y:220, w:120, h:20},
+  {x:580, y:160, w:120, h:20}
+];
+
+// 金币数组
+let coins = [
+  {x:220, y:240, w:20, h:20, got:false},
+  {x:420, y:180, w:20, h:20, got:false},
+  {x:620, y:120, w:20, h:20, got:false}
+];
+
+// 怪物数组
+let enemies = [
+  {x:300, y:320, w:32, h:32, vx:-1.5, alive:true},
+  {x:500, y:320, w:32, h:32, vx:-1.5, alive:true}
+];
+
+// 键盘监听
+document.addEventListener('keydown', e=>{
+  keys[e.code] = true;
+  if(e.code === 'Space') e.preventDefault();
+});
+document.addEventListener('keyup', e=>{
+  keys[e.code] = false;
+});
+
+// 碰撞检测
+function isCollide(a,b){
+  return a.x < b.x+b.w && a.x+a.w>b.x && a.y < b.y+b.h && a.y+a.h>b.y;
+}
+
+// 重置游戏
+function resetGame(){
+  score = 0;
+  scoreDom.textContent = score;
+  mario.x = 50;
+  mario.y = 300;
+  mario.vx = mario.vy = 0;
+
+  coins = [
+    {x:220, y:240, w:20, h:20, got:false},
+    {x:420, y:180, w:20, h:20, got:false},
+    {x:620, y:120, w:20, h:20, got:false}
+  ];
+  enemies = [
+    {x:300, y:320, w:32, h:32, vx:-1.5, alive:true},
+    {x:500, y:320, w:32, h:32, vx:-1.5, alive:true}
+  ];
+}
+document.getElementById('restart').onclick = resetGame;
+
+// 游戏循环
+function loop(){
+  requestAnimationFrame(loop);
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  // 玩家左右移动
+  mario.vx = 0;
+  if(keys['ArrowLeft'] && mario.x>0) mario.vx = -mario.speed;
+  if(keys['ArrowRight'] && mario.x+mario.w<canvas.width) mario.vx = mario.speed;
+
+  // 跳跃
+  if(keys['Space'] && mario.onGround){
+    mario.vy = JUMP_FORCE;
+    mario.onGround = false;
+  }
+
+  // 重力
+  mario.vy += GRAVITY;
+  mario.x += mario.vx;
+  mario.y += mario.vy;
+
+  // 平台碰撞检测
+  mario.onGround = false;
+  for(let plat of platforms){
+    if(isCollide(mario, plat)){
+      // 下落踩上平台
+      if(mario.vy>0 && mario.y+mario.h - mario.vy <= plat.y){
+        mario.y = plat.y - mario.h;
+        mario.vy = 0;
+        mario.onGround = true;
+      }
+    }
+  }
+
+  // 绘制平台（绿色砖块）
+  ctx.fillStyle="#8b4513";
+  for(let plat of platforms){
+    ctx.fillRect(plat.x, plat.y, plat.w, plat.h);
+  }
+
+  // 金币拾取
+  for(let coin of coins){
+    if(!coin.got && isCollide(mario, coin)){
+      coin.got = true;
+      score += 10;
+      scoreDom.textContent = score;
+    }
+    if(!coin.got){
+      ctx.fillStyle="#ffd700";
+      ctx.beginPath();
+      ctx.arc(coin.x+10, coin.y+10, 10, 0, Math.PI*2);
+      ctx.fill();
+    }
+  }
+
+  // 怪物逻辑
+  for(let enemy of enemies){
+    if(!enemy.alive) continue;
+    enemy.x += enemy.vx;
+    // 怪物边界折返
+    if(enemy.x<50 || enemy.x>canvas.width-80) enemy.vx *= -1;
+
+    // 马里奥踩到怪物头顶：消灭怪物
+    if(isCollide(mario, enemy)){
+      if(mario.vy>0 && mario.y+mario.h - mario.vy < enemy.y+10){
+        enemy.alive = false;
+        mario.vy = JUMP_FORCE/2;
+        score += 20;
+        scoreDom.textContent = score;
+      }else{
+        // 被怪物碰到，游戏结束
+        alert(`游戏结束！得分：${score}`);
+        resetGame();
+        return;
+      }
+    }
+
+    // 绘制怪物
+    ctx.fillStyle="#800000";
+    ctx.fillRect(enemy.x, enemy.y, enemy.w, enemy.h);
+  }
+
+  // 绘制马里奥（红帽子蓝衣服）
+  ctx.fillStyle="#ff0000";
+  ctx.fillRect(mario.x+4, mario.y, 24, 12);
+  ctx.fillStyle="#0066ff";
+  ctx.fillRect(mario.x+6, mario.y+12, 20, 16);
+  ctx.fillStyle="#ffdb99";
+  ctx.fillRect(mario.x+8, mario.y+4, 16, 8);
+}
+
+resetGame();
+loop();
+</script>
+</body>
+</html>
