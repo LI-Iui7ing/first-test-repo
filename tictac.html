@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<title>联机双人井字棋</title>
+<title>联机井字棋</title>
 <style>
 *{
     margin: 0;
@@ -108,10 +108,10 @@ td.X{
 </style>
 </head>
 <body>
-<h1>🌐 联机井字棋</h1>
+<h1>🌐 点对点联机井字棋</h1>
 <div class="room-box">
     <span>房间号：</span>
-    <input id="roomId" placeholder="自定义房间号">
+    <input id="roomId" placeholder="自定义6位房间码" maxlength="6">
     <button id="joinBtn">加入/创建房间</button>
 </div>
 <div id="stateTip">未连接房间，请输入房间号加入</div>
@@ -136,76 +136,92 @@ td.X{
 <button class="restart-btn" onclick="resetGame()">重新开局</button>
 </div>
 <div class="tips">
-1. 两个人输入一模一样的房间号，点加入房间即可联机<br>
-2. 先进入房间的是O先手，后进入是X后手；只能轮到自己才能落子
+1. 两个人输入一模一样的6位房间号，点加入房间即可联机<br>
+2. 先创建房间的是O先手，后加入是X后手；只能轮到自己才能落子
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/socket.io@4/dist/socket.io.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.2/dist/peerjs.min.js"></script>
 <script>
-// 免费公共中转服务器，无需自己部署后端
-const socket = io('https://socketio-chat-h9jt.herokuapp.com/');
+let peer, conn;
 let roomId = '';
-let myRole = null; // O / X
+let myRole = null;
 let isMyTurn = false;
 let board = ['','','','','','','','',''];
 const stateTip = document.getElementById('stateTip');
 const cells = document.querySelectorAll('td');
 
-// 绑定格子点击
+// 格子点击落子
 cells.forEach(cell=>{
     cell.onclick = ()=>{
         const idx = Number(cell.dataset.index);
-        if(!roomId || !myRole || !isMyTurn || board[idx]) return;
-        socket.emit('move',{room:roomId,index:idx,role:myRole});
+        if(!conn || !myRole || !isMyTurn || board[idx]) return;
+        conn.send({type:'move',index:idx,role:myRole});
     }
 })
 
-// 加入房间
+// 加入房间按钮
 document.getElementById('joinBtn').onclick = ()=>{
     roomId = document.getElementById('roomId').value.trim();
-    if(!roomId){
-        alert('请填写房间号！');
+    if(!roomId || roomId.length!==6){
+        alert('请填写6位数字房间号！');
         return;
     }
-    socket.emit('join',roomId);
-}
+    stateTip.innerText = "正在连接房间...";
+    peer = new Peer(roomId);
 
-// 监听房间人数分配角色
-socket.on('roleAssign',(role)=>{
-    myRole = role;
-    stateTip.innerText = `已加入房间${roomId}，你是【${role}】`;
-    if(role==='O'){
+    // 自己是创建者（O先手）
+    peer.on('open', id=>{
+        myRole = 'O';
         isMyTurn = true;
-        stateTip.innerText += '，轮到你下棋';
-    }else{
-        isMyTurn = false;
-        stateTip.innerText += '，等待对手落子';
-    }
-});
+        stateTip.innerText = `你是房主【O】，等待对手接入...`;
+        // 等待对方接入
+        peer.on('connection', c=>{
+            conn = c;
+            bindConnEvents();
+            stateTip.innerText = `对手已接入！轮到你下棋`;
+        })
+    })
 
-// 接收对手落子，同步棋盘
-socket.on('remoteMove',(data)=>{
-    const {index,role,nextTurnRole} = data;
-    board[index] = role;
-    cells[index].innerText = role;
-    cells[index].classList.add(role);
-    // 切换回合
-    isMyTurn = (myRole === nextTurnRole);
-    stateTip.innerText = isMyTurn ? '轮到你下棋' : '等待对手落子';
-    checkWin();
-})
-
-// 有人离开房间
-socket.on('userLeave',()=>{
-    alert('对手已退出房间，游戏终止');
-    resetGame();
-})
-
-// 重置游戏
-function resetGame(){
-    socket.emit('restart',roomId);
+    // 作为客户端加入已有房间（X后手）
+    peer.on('error', err=>{
+        if(err.type==='unavailable-id'){
+            peer = new Peer();
+            peer.on('open',()=>{
+                conn = peer.connect(roomId);
+                myRole = 'X';
+                isMyTurn = false;
+                stateTip.innerText = `你是【X】，等待房主落子`;
+                bindConnEvents();
+            })
+        }
+    })
 }
-socket.on('gameReset',()=>{
+
+// 绑定连接消息监听
+function bindConnEvents(){
+    conn.on('data', data=>{
+        if(data.type==='move'){
+            const {index,role} = data;
+            board[index] = role;
+            cells[index].innerText = role;
+            cells[index].classList.add(role);
+            // 切换回合
+            isMyTurn = !isMyTurn;
+            stateTip.innerText = isMyTurn ? '轮到你下棋' : '等待对手落子';
+            checkWin();
+        }
+        if(data.type==='restart'){
+            resetLocalGame();
+        }
+    })
+    conn.on('close',()=>{
+        alert('对手断开连接，对局结束');
+        resetLocalGame();
+    })
+}
+
+// 本地重置棋盘
+function resetLocalGame(){
     board = ['','','','','','','','',''];
     cells.forEach(c=>{
         c.innerText = '';
@@ -213,7 +229,13 @@ socket.on('gameReset',()=>{
     })
     isMyTurn = (myRole==='O');
     stateTip.innerText = isMyTurn ? '新对局，轮到你下棋' : '等待对手';
-})
+}
+
+// 全局重启对局，同步给对方
+function resetGame(){
+    if(conn) conn.send({type:'restart'});
+    resetLocalGame();
+}
 
 // 胜负判定
 function checkWin(){
