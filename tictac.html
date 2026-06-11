@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<title>井字棋双人对战</title>
+<title>联机双人井字棋</title>
 <style>
 *{
     margin: 0;
@@ -15,16 +15,46 @@ body{
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding-top: 50px;
+    padding-top: 30px;
 }
 h1{
     color: #222;
-    margin-bottom: 25px;
-    font-size: 28px;
+    margin-bottom: 15px;
+    font-size: 26px;
+}
+.room-box{
+    background:#fff;
+    padding:16px 24px;
+    border-radius:12px;
+    box-shadow:0 4px 15px rgba(0,0,0,0.1);
+    margin-bottom:20px;
+    display:flex;
+    gap:10px;
+    align-items:center;
+}
+#roomId{
+    padding:8px 12px;
+    border:1px solid #ccc;
+    border-radius:6px;
+    font-size:16px;
+    width:140px;
+}
+#joinBtn{
+    padding:8px 16px;
+    background:#2196F3;
+    color:#fff;
+    border:none;
+    border-radius:6px;
+    cursor:pointer;
+}
+#stateTip{
+    margin-bottom:16px;
+    font-size:17px;
+    color:#333;
 }
 .game-card{
     background: #fff;
-    padding: 30px;
+    padding: 25px;
     border-radius: 18px;
     box-shadow: 0 10px 35px rgba(0,0,0,0.12);
 }
@@ -33,12 +63,12 @@ table{
     border-spacing: 8px;
 }
 td{
-    width: 90px;
-    height: 90px;
+    width: 85px;
+    height: 85px;
     background-color: #f2f7ff;
     border-radius: 10px;
     text-align: center;
-    font-size: 42px;
+    font-size: 40px;
     font-weight: bold;
     cursor: pointer;
     transition: all 0.2s ease;
@@ -46,18 +76,13 @@ td{
 }
 td:hover{
     background-color: #dceaff;
-    transform: scale(1.05);
+    transform: scale(1.03);
 }
 td.O{
     color: #1976d2;
 }
 td.X{
     color: #d32f2f;
-}
-.tips{
-    margin-top: 22px;
-    font-size: 15px;
-    color: #666;
 }
 .restart-btn{
     margin-top: 18px;
@@ -68,69 +93,145 @@ td.X{
     color: white;
     font-size: 16px;
     cursor: pointer;
-    transition: 0.2s;
 }
 .restart-btn:hover{
-    transform: translateY(-2px);
     box-shadow: 0 5px 15px rgba(25,118,210,0.3);
+}
+.tips{
+    margin-top:20px;
+    font-size:14px;
+    color:#666;
+    text-align:center;
+    max-width:420px;
+    line-height:1.6;
 }
 </style>
 </head>
 <body>
-<h1>双人井字棋对战</h1>
+<h1>🌐 联机井字棋</h1>
+<div class="room-box">
+    <span>房间号：</span>
+    <input id="roomId" placeholder="自定义房间号">
+    <button id="joinBtn">加入/创建房间</button>
+</div>
+<div id="stateTip">未连接房间，请输入房间号加入</div>
 <div class="game-card">
 <table>
     <tr>
-        <td onclick="play(this,0)"></td>
-        <td onclick="play(this,1)"></td>
-        <td onclick="play(this,2)"></td>
+        <td data-index="0"></td>
+        <td data-index="1"></td>
+        <td data-index="2"></td>
     </tr>
     <tr>
-        <td onclick="play(this,3)"></td>
-        <td onclick="play(this,4)"></td>
-        <td onclick="play(this,5)"></td>
+        <td data-index="3"></td>
+        <td data-index="4"></td>
+        <td data-index="5"></td>
     </tr>
     <tr>
-        <td onclick="play(this,6)"></td>
-        <td onclick="play(this,7)"></td>
-        <td onclick="play(this,8)"></td>
+        <td data-index="6"></td>
+        <td data-index="7"></td>
+        <td data-index="8"></td>
     </tr>
 </table>
 <button class="restart-btn" onclick="resetGame()">重新开局</button>
 </div>
-<div class="tips">规则：O先手、X后手，率先连成一线即可获胜</div>
+<div class="tips">
+1. 两个人输入一模一样的房间号，点加入房间即可联机<br>
+2. 先进入房间的是O先手，后进入是X后手；只能轮到自己才能落子
+</div>
 
+<script src="https://cdn.jsdelivr.net/npm/socket.io@4/dist/socket.io.min.js"></script>
 <script>
-let arr = ['','','','','','','','',''];
-let turn = true; // true=O回合
+// 免费公共中转服务器，无需自己部署后端
+const socket = io('https://socketio-chat-h9jt.herokuapp.com/');
+let roomId = '';
+let myRole = null; // O / X
+let isMyTurn = false;
+let board = ['','','','','','','','',''];
+const stateTip = document.getElementById('stateTip');
+const cells = document.querySelectorAll('td');
 
-function play(td,idx){
-    if(arr[idx]) return;
-    let mark = turn ? 'O' : 'X';
-    arr[idx] = mark;
-    td.innerText = mark;
-    td.classList.add(mark);
-    turn=!turn;
-    checkWin();
+// 绑定格子点击
+cells.forEach(cell=>{
+    cell.onclick = ()=>{
+        const idx = Number(cell.dataset.index);
+        if(!roomId || !myRole || !isMyTurn || board[idx]) return;
+        socket.emit('move',{room:roomId,index:idx,role:myRole});
+    }
+})
+
+// 加入房间
+document.getElementById('joinBtn').onclick = ()=>{
+    roomId = document.getElementById('roomId').value.trim();
+    if(!roomId){
+        alert('请填写房间号！');
+        return;
+    }
+    socket.emit('join',roomId);
 }
 
+// 监听房间人数分配角色
+socket.on('roleAssign',(role)=>{
+    myRole = role;
+    stateTip.innerText = `已加入房间${roomId}，你是【${role}】`;
+    if(role==='O'){
+        isMyTurn = true;
+        stateTip.innerText += '，轮到你下棋';
+    }else{
+        isMyTurn = false;
+        stateTip.innerText += '，等待对手落子';
+    }
+});
+
+// 接收对手落子，同步棋盘
+socket.on('remoteMove',(data)=>{
+    const {index,role,nextTurnRole} = data;
+    board[index] = role;
+    cells[index].innerText = role;
+    cells[index].classList.add(role);
+    // 切换回合
+    isMyTurn = (myRole === nextTurnRole);
+    stateTip.innerText = isMyTurn ? '轮到你下棋' : '等待对手落子';
+    checkWin();
+})
+
+// 有人离开房间
+socket.on('userLeave',()=>{
+    alert('对手已退出房间，游戏终止');
+    resetGame();
+})
+
+// 重置游戏
+function resetGame(){
+    socket.emit('restart',roomId);
+}
+socket.on('gameReset',()=>{
+    board = ['','','','','','','','',''];
+    cells.forEach(c=>{
+        c.innerText = '';
+        c.className = '';
+    })
+    isMyTurn = (myRole==='O');
+    stateTip.innerText = isMyTurn ? '新对局，轮到你下棋' : '等待对手';
+})
+
+// 胜负判定
 function checkWin(){
     let winLine = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
     for(let line of winLine){
         let [a,b,c] = line;
-        if(arr[a] && arr[a]===arr[b] && arr[a]===arr[c]){
-            alert(arr[a]+" 玩家获胜！");
+        if(board[a] && board[a]===board[b] && board[a]===board[c]){
+            setTimeout(()=>{
+                alert(`${board[a]} 玩家获胜！`);
+            },100);
             return;
         }
     }
-    // 平局判定
-    if(!arr.includes('')){
-        alert("棋盘填满，本局平局！");
+    if(!board.includes('')){
+        setTimeout(()=>{
+            alert('棋盘填满，平局！');
+        },100);
     }
-}
-
-function resetGame(){
-    location.reload();
 }
 </script>
 </body>
