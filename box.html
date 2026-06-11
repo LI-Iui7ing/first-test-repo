@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>经典推箱子</title>
+<style>
+*{
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: "Microsoft YaHei",sans-serif;
+}
+body{
+    background: linear-gradient(135deg,#eef2ff,#dbeafe);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 30px 0;
+}
+.game-card{
+    background: #fff;
+    padding: 22px;
+    border-radius: 16px;
+    box-shadow: 0 8px 30px rgba(37,99,235,0.15);
+}
+.top-bar{
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+.info-text{
+    font-size: 17px;
+}
+.btn-group button{
+    padding: 7px 14px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    margin-left: 8px;
+    transition: 0.2s;
+}
+#restart{
+    background:#3b82f6;
+    color:#fff;
+}
+#undo{
+    background:#9ca3af;
+    color:#fff;
+}
+#nextLevel{
+    background:#10b981;
+    color:#fff;
+}
+button:hover{
+    transform: translateY(-2px);
+}
+#gameBox{
+    display: grid;
+    gap: 2px;
+    background:#94a3b8;
+    padding: 2px;
+}
+.cell{
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+}
+.wall{
+    background:#475569;
+}
+.floor{
+    background:#f8fafc;
+}
+.target{
+    background:#fef3c7;
+}
+.player{
+    color:#2563eb;
+}
+.box{
+    color:#b45309;
+}
+.tip-desc{
+    margin-top: 18px;
+    color:#4b5563;
+    font-size: 14px;
+    text-align: center;
+}
+</style>
+</head>
+<body>
+    <h1>📦 经典推箱子</h1>
+    <div class="game-card">
+        <div class="top-bar">
+            <div class="info-text">
+                关卡：<span id="level">1</span>
+                &nbsp;&nbsp;步数：<span id="step">0</span>
+            </div>
+            <div class="btn-group">
+                <button id="undo">撤销上一步</button>
+                <button id="restart">重置本关</button>
+                <button id="nextLevel">下一关</button>
+            </div>
+        </div>
+        <div id="gameBox"></div>
+    </div>
+    <div class="tip-desc">方向键 ↑ ↓ ← → 移动小人，把所有箱子推到黄色目标点即可过关</div>
+
+<script>
+// 关卡地图定义
+const levels = [
+    // 第1关
+    [
+        [1,1,1,1,1,1,1],
+        [1,0,0,0,0,0,1],
+        [1,0,2,3,0,0,1],
+        [1,0,0,0,2,0,1],
+        [1,0,4,0,0,0,1],
+        [1,1,1,1,1,1,1]
+    ],
+    // 第2关
+    [
+        [1,1,1,1,1,1,1,1],
+        [1,0,0,0,0,0,0,1],
+        [1,0,0,2,2,0,0,1],
+        [1,0,0,0,0,0,0,1],
+        [1,0,4,0,0,0,4,1],
+        [1,0,0,0,0,0,0,1],
+        [1,1,1,1,1,1,1,1]
+    ],
+    // 第3关
+    [
+        [1,1,1,1,1,1,1,1,1],
+        [1,0,0,0,1,0,0,0,1],
+        [1,0,2,0,1,0,2,0,1],
+        [1,0,0,0,0,0,0,0,1],
+        [1,1,0,0,4,0,0,1,1],
+        [1,0,0,0,0,0,0,0,1],
+        [1,0,2,0,1,0,2,0,1],
+        [1,0,0,0,1,0,0,0,1],
+        [1,1,1,1,1,1,1,1,1]
+    ]
+];
+
+let curLevel = 0;
+let map = [];
+let playerX, playerY;
+let stepCount = 0;
+let history = []; // 步数回溯记录
+const gameBox = document.getElementById('gameBox');
+const levelDom = document.getElementById('level');
+const stepDom = document.getElementById('step');
+
+// 地图元素编码
+const WALL = 1;
+const FLOOR = 0;
+const BOX = 2;
+const TARGET = 3;
+const PLAYER = 4;
+
+// 初始化关卡
+function initLevel(lvIdx){
+    stepCount = 0;
+    history = [];
+    map = JSON.parse(JSON.stringify(levels[lvIdx]));
+    levelDom.textContent = lvIdx+1;
+    stepDom.textContent = stepCount;
+    // 找到玩家起始位置
+    outer:for(let y=0;y<map.length;y++){
+        for(let x=0;x<map[y].length;x++){
+            if(map[y][x] === PLAYER){
+                playerX = x;
+                playerY = y;
+                break outer;
+            }
+        }
+    }
+    renderMap();
+}
+
+// 渲染地图
+function renderMap(){
+    gameBox.innerHTML = '';
+    gameBox.style.gridTemplateColumns = `repeat(${map[0].length}, 1fr)`;
+    for(let y=0;y<map.length;y++){
+        for(let x=0;x<map[y].length;x++){
+            const cell = document.createElement('div');
+            cell.className = 'cell';
+            const val = map[y][x];
+            if(val === WALL) cell.classList.add('wall');
+            else if(val === TARGET) cell.classList.add('target');
+            else cell.classList.add('floor');
+
+            if(x===playerX && y===playerY){
+                cell.classList.add('player');
+                cell.textContent = '👨';
+            }else if(val === BOX){
+                cell.classList.add('box');
+                cell.textContent = '📦';
+            }
+            gameBox.appendChild(cell);
+        }
+    }
+    checkWin();
+}
+
+// 检测是否过关
+function checkWin(){
+    for(let y=0;y<map.length;y++){
+        for(let x=0;x<map[y].length;x++){
+            // 目标点上没有箱子
+            if(map[y][x] === TARGET) return;
+        }
+    }
+    setTimeout(()=>{
+        alert(`恭喜通关第${curLevel+1}关！总步数：${stepCount}`);
+        if(curLevel < levels.length-1){
+            curLevel++;
+            initLevel(curLevel);
+        }else{
+            alert('全部关卡通关完毕！');
+        }
+    },200);
+}
+
+// 移动逻辑 dx dy 偏移量
+function move(dx, dy){
+    const nx = playerX + dx;
+    const ny = playerY + dy;
+    // 撞墙禁止移动
+    if(map[ny][nx] === WALL) return;
+
+    // 前方是箱子
+    if(map[ny][nx] === BOX){
+        const nnx = nx+dx;
+        const nny = ny+dy;
+        // 箱子下一格是墙/箱子，推不动
+        if(map[nny][nnx] === WALL || map[nny][nnx] === BOX) return;
+        // 保存历史用于撤销
+        history.push({px:playerX,py:playerY,bx:nx,by:ny,bnewx:nnx,bnewy:nny});
+        // 箱子移动
+        map[ny][nx] = map[ny][nx]===TARGET ? TARGET : FLOOR;
+        map[nny][nnx] = BOX;
+    }else{
+        history.push({px:playerX,py:playerY});
+    }
+    // 玩家坐标更新
+    playerX = nx;
+    playerY = ny;
+    stepCount++;
+    stepDom.textContent = stepCount;
+    renderMap();
+}
+
+// 撤销上一步
+function undoStep(){
+    if(history.length===0) return alert('没有可撤销的操作');
+    const last = history.pop();
+    playerX = last.px;
+    playerY = last.py;
+    stepCount--;
+    stepDom.textContent = stepCount;
+    // 撤回箱子
+    if(last.bx !== undefined){
+        map[last.bnewy][last.bnewx] = map[last.bnewy][last.bnewx]===TARGET ? TARGET : FLOOR;
+        map[last.by][last.bx] = BOX;
+    }
+    renderMap();
+}
+
+// 键盘方向键监听
+document.addEventListener('keydown',e=>{
+    switch(e.key){
+        case 'ArrowUp': move(0,-1);break;
+        case 'ArrowDown': move(0,1);break;
+        case 'ArrowLeft': move(-1,0);break;
+        case 'ArrowRight': move(1,0);break;
+    }
+});
+
+// 按钮绑定
+document.getElementById('restart').onclick = ()=>initLevel(curLevel);
+document.getElementById('undo').onclick = undoStep;
+document.getElementById('nextLevel').onclick = ()=>{
+    if(curLevel<levels.length-1){
+        curLevel++;
+        initLevel(curLevel);
+    }else{
+        alert('已是最后一关！');
+    }
+};
+
+// 启动第一关
+initLevel(0);
+</script>
+</body>
+</html>
