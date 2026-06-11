@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>井字棋</title>
+<style>
+td{width:80px;height:80px;border:1px solid #000;text-align:center;font-size:40px;cursor:pointer}
+</style>
+</head>
+<body>
+<table>
+    <tr><td onclick="play(this,0)"></td><td onclick="play(this,1)"></td><td onclick="play(this,2)"></td></tr>
+    <tr><td onclick="play(this,3)"></td><td onclick="play(this,4)"></td><td onclick="play(this,5)"></td></tr>
+    <tr><td onclick="play(this,6)"></td><td onclick="play(this,7)"></td><td onclick="play(this,8)"></td></tr>
+</table>
+<script>
+let arr = ['','','','','','','','',''];
+let turn = true;
+function play(td,idx){
+    if(arr[idx])return;
+    arr[idx]=turn?'O':'X';
+    td.innerText=arr[idx];
+    turn=!turn;
+    checkWin();
+}
+function checkWin(){
+    let win=[[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+    for(let item of win){
+        let [a,b,c]=item;
+        if(arr[a]&&arr[a]===arr[b]&&arr[a]===arr[c]){
+            alert(arr[a]+" 获胜！");
+            location.reload();
+        }
+    }
+}
+</script>
+</body>
+</html>
