@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>猜数字小游戏</title>
+</head>
+<body>
+    <h2>猜1-100数字游戏</h2>
+    <script>
+        let num = Math.floor(Math.random()*100)+1;
+        let count = 0;
+        function guess(){
+            let input = document.getElementById("inp").value;
+            count++;
+            if(input<num){
+                alert("小了！再试试");
+            }else if(input>num){
+                alert("大了！再试试");
+            }else{
+                alert(`恭喜猜对！一共猜了${count}次`);
+            }
+        }
+    </script>
+    <input id="inp" placeholder="输入数字">
+    <button onclick="guess()">提交猜测</button>
+</body>
+</html>
