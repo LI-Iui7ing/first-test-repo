@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>2048小游戏</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;font-family:Microsoft YaHei}
+body{background:#faf8ef;display:flex;flex-direction:column;align-items:center;padding:30px}
+.container{background:#bbada0;padding:12px;border-radius:10px}
+.grid{display:grid;grid-template-columns:repeat(4,90px);gap:10px}
+.cell{width:90px;height:90px;background:#cdc1b4;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:30px;font-weight:bold}
+.top-bar{display:flex;width:400px;justify-content:space-between;align-items:center;margin-bottom:12px}
+.score-box{background:#bbada0;color:white;padding:6px 12px;border-radius:6px}
+#restart{background:#8f7a66;color:white;border:none;padding:7px 12px;border-radius:6px;cursor:pointer}
+</style>
+</head>
+<body>
+<div class="top-bar">
+    <h2>2048</h2>
+    <div>
+        <span class="score-box">分数：<span id="score">0</span></span>
+        <button id="restart">重新开始</button>
+    </div>
+</div>
+<div class="container">
+    <div class="grid" id="grid"></div>
+</div>
+<script>
+const gridDom=document.getElementById('grid');
+const scoreDom=document.getElementById('score');
+let grid=[[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0]];
+let score=0;
+const colors={
+    0:'#cdc1b4',2:'#eee4da',4:'#ede0c8',8:'#f2b179',16:'#f59563',
+    32:'#f67c5f',64:'#f65e3b',128:'#edcf72',256:'#edcc61',
+    512:'#edc850',1024:'#edc53f',2048:'#edc22e'
+};
+function render(){
+    gridDom.innerHTML='';
+    for(let y=0;y<4;y++){
+        for(let x=0;x<4;x++){
+            let val=grid[y][x];
+            let div=document.createElement('div');
+            div.className='cell';
+            div.style.background=colors[val];
+            div.textContent=val?val:'';
+            gridDom.appendChild(div);
+        }
+    }
+    scoreDom.textContent=score;
+}
+function randomAdd(){
+    let empty=[];
+    for(let y=0;y<4;y++)for(let x=0;x<4;x++)if(grid[y][x]===0)empty.push([x,y]);
+    if(!empty.length)return false;
+    let [x,y]=empty[Math.floor(Math.random()*empty.length)];
+    grid[y][x]=Math.random()>0.9?4:2;
+    return true;
+}
+function init(){
+    score=0;
+    grid=[[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0]];
+    randomAdd();randomAdd();render();
+}
+function slide(arr){
+    let newArr=arr.filter(v=>v!==0);
+    for(let i=0;i<newArr.length-1;i++){
+        if(newArr[i]===newArr[i+1]){
+            newArr[i]*=2;score+=newArr[i];newArr.splice(i+1,1);
+        }
+    }
+    while(newArr.length<4)newArr.push(0);
+    return newArr;
+}
+function move(dir){
+    let old=JSON.parse(JSON.stringify(grid));
+    if(dir==='left') grid=grid.map(row=>slide(row));
+    if(dir==='right') grid=grid.map(row=>slide(row.reverse()).reverse());
+    if(dir==='up'){
+        for(let x=0;x<4;x++){
+            let col=[grid[0][x],grid[1][x],grid[2][x],grid[3][x]];
+            col=slide(col);
+            for(let y=0;y<4;y++)grid[y][x]=col[y];
+        }
+    }
+    if(dir==='down'){
+        for(let x=0;x<4;x++){
+            let col=[grid[0][x],grid[1][x],grid[2][x],grid[3][x]];
+            col=slide(col.reverse()).reverse();
+            for(let y=0;y<4;y++)grid[y][x]=col[y];
+        }
+    }
+    if(JSON.stringify(old)!==JSON.stringify(grid)){
+        randomAdd();render();checkWinLose();
+    }
+}
+function checkWinLose(){
+    for(let y=0;y<4;y++)for(let x=0;x<4;x++)if(grid[y][x]===2048){alert('恭喜合成2048！');return;}
+    for(let y=0;y<4;y++){
+        for(let x=0;x<4;x++){
+            if(grid[y][x]===0)return;
+            if(x<3&&grid[y][x]===grid[y][x+1])return;
+            if(y<3&&grid[y][x]===grid[y+1][x])return;
+        }
+    }
+    alert('棋盘填满，游戏结束！');
+}
+document.addEventListener('keydown',e=>{
+    if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)) move(e.key.replace('Arrow','').toLowerCase());
+})
+document.getElementById('restart').onclick=init;
+init();
+</script>
+</body>
+</html>
