@@ -1,37 +1,136 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<title>井字棋</title>
+<title>井字棋双人对战</title>
 <style>
-td{width:80px;height:80px;border:1px solid #000;text-align:center;font-size:40px;cursor:pointer}
+*{
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: "Microsoft YaHei",sans-serif;
+}
+body{
+    background: linear-gradient(135deg, #e8f4fd, #fef4f8);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-top: 50px;
+}
+h1{
+    color: #222;
+    margin-bottom: 25px;
+    font-size: 28px;
+}
+.game-card{
+    background: #fff;
+    padding: 30px;
+    border-radius: 18px;
+    box-shadow: 0 10px 35px rgba(0,0,0,0.12);
+}
+table{
+    border-collapse: separate;
+    border-spacing: 8px;
+}
+td{
+    width: 90px;
+    height: 90px;
+    background-color: #f2f7ff;
+    border-radius: 10px;
+    text-align: center;
+    font-size: 42px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    user-select: none;
+}
+td:hover{
+    background-color: #dceaff;
+    transform: scale(1.05);
+}
+td.O{
+    color: #1976d2;
+}
+td.X{
+    color: #d32f2f;
+}
+.tips{
+    margin-top: 22px;
+    font-size: 15px;
+    color: #666;
+}
+.restart-btn{
+    margin-top: 18px;
+    padding: 9px 24px;
+    border: none;
+    border-radius: 8px;
+    background: linear-gradient(90deg,#42a5f5,#1976d2);
+    color: white;
+    font-size: 16px;
+    cursor: pointer;
+    transition: 0.2s;
+}
+.restart-btn:hover{
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(25,118,210,0.3);
+}
 </style>
 </head>
 <body>
+<h1>双人井字棋对战</h1>
+<div class="game-card">
 <table>
-    <tr><td onclick="play(this,0)"></td><td onclick="play(this,1)"></td><td onclick="play(this,2)"></td></tr>
-    <tr><td onclick="play(this,3)"></td><td onclick="play(this,4)"></td><td onclick="play(this,5)"></td></tr>
-    <tr><td onclick="play(this,6)"></td><td onclick="play(this,7)"></td><td onclick="play(this,8)"></td></tr>
+    <tr>
+        <td onclick="play(this,0)"></td>
+        <td onclick="play(this,1)"></td>
+        <td onclick="play(this,2)"></td>
+    </tr>
+    <tr>
+        <td onclick="play(this,3)"></td>
+        <td onclick="play(this,4)"></td>
+        <td onclick="play(this,5)"></td>
+    </tr>
+    <tr>
+        <td onclick="play(this,6)"></td>
+        <td onclick="play(this,7)"></td>
+        <td onclick="play(this,8)"></td>
+    </tr>
 </table>
+<button class="restart-btn" onclick="resetGame()">重新开局</button>
+</div>
+<div class="tips">规则：O先手、X后手，率先连成一线即可获胜</div>
+
 <script>
 let arr = ['','','','','','','','',''];
-let turn = true;
+let turn = true; // true=O回合
+
 function play(td,idx){
-    if(arr[idx])return;
-    arr[idx]=turn?'O':'X';
-    td.innerText=arr[idx];
+    if(arr[idx]) return;
+    let mark = turn ? 'O' : 'X';
+    arr[idx] = mark;
+    td.innerText = mark;
+    td.classList.add(mark);
     turn=!turn;
     checkWin();
 }
+
 function checkWin(){
-    let win=[[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
-    for(let item of win){
-        let [a,b,c]=item;
-        if(arr[a]&&arr[a]===arr[b]&&arr[a]===arr[c]){
-            alert(arr[a]+" 获胜！");
-            location.reload();
+    let winLine = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+    for(let line of winLine){
+        let [a,b,c] = line;
+        if(arr[a] && arr[a]===arr[b] && arr[a]===arr[c]){
+            alert(arr[a]+" 玩家获胜！");
+            return;
         }
     }
+    // 平局判定
+    if(!arr.includes('')){
+        alert("棋盘填满，本局平局！");
+    }
+}
+
+function resetGame(){
+    location.reload();
 }
 </script>
 </body>
